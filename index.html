@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aether-Vision • Gesture Harmonic Workstation v1.0</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div id="workstation-shell" class="workstation-shell">
+      <!-- TOP TELEMETRY & HARDWARE MODE BAR -->
+      <header class="telemetry-bar" role="banner">
+        <div class="brand-cluster">
+          <div class="rack-screw" aria-hidden="true"></div>
+          <div class="brand-badge">
+            <span class="status-led" id="engine-led" aria-hidden="true"></span>
+            <div>
+              <h1 class="brand-title">AETHER-VISION <span class="brand-version">v1.0</span></h1>
+              <p class="brand-subtitle" id="telemetry-status">
+                STANDBY • CLICK POWER OR MOVE POINTER IN STAGE
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="transport-controls" role="toolbar" aria-label="Workstation Primary Controls">
+          <button type="button" id="btn-power-cam" class="hw-btn hw-btn-primary">
+            <span class="btn-led" id="cam-led"></span>
+            <span id="btn-power-label">⚡ START CAMERA &amp; SYNTH</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-mouse-mode"
+            class="hw-btn hw-btn-active"
+            title="Use Mouse Pointer &amp; Keys 1-7 / Q / E to perform without webcam"
+          >
+            <span class="btn-led active" id="mouse-led"></span>
+            <span>🖱️ STUDIO MOUSE SIM: ON</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-play-mode"
+            class="hw-btn"
+            title="Shortcut: C — Switch between Single-Note Melody Mode and 6-Quadrant Chords Matrix"
+          >
+            <span class="btn-led" id="chords-led"></span>
+            <span id="play-mode-label">MODE: SINGLE NOTE [C]</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-hand-swap"
+            class="hw-btn"
+            title="Shortcut: H — Mirror Left/Right stage zones for Left-Handed Musicians"
+          >
+            <span class="btn-led" id="swap-led"></span>
+            <span id="hand-swap-label">HAND SWAP: STANDARD [H]</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-note-hud"
+            class="hw-btn hw-btn-active"
+            title="Shortcut: N — Toggle Huge Center Note &amp; Chord HUD"
+          >
+            <span class="btn-led active" id="hud-led"></span>
+            <span id="note-hud-label">NOTE HUD: ON [N]</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-zen-mode"
+            class="hw-btn"
+            title="Shortcut: Z — Toggle Distraction-Free Zen Fullscreen View"
+          >
+            <span>⛶ ZEN [Z]</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-record"
+            class="hw-btn hw-btn-record"
+            title="Record post-limiter studio audio output"
+          >
+            <span class="rec-dot" id="rec-dot"></span>
+            <span id="rec-label">● REC</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-kill-sound"
+            class="hw-btn hw-btn-danger"
+            title="Shortcut: Esc or M — Emergency Kill Sound / Master Mute"
+          >
+            <span id="kill-sound-label">🔇 KILL SOUND [ESC]</span>
+          </button>
+        </div>
+
+        <div class="scope-cluster">
+          <canvas id="scope-canvas" width="148" height="36" aria-label="Real-time Audio Oscilloscope"></canvas>
+          <div class="dsp-readout">
+            <span id="fps-readout">60 FPS</span>
+            <span class="dsp-tag">0.01s DSP</span>
+          </div>
+          <div class="rack-screw" aria-hidden="true"></div>
+        </div>
+      </header>
+
+      <!-- TOP 8-SLOT GESTURE LEGEND BAR (Replaces X-Axis Pitch Ribbon) -->
+      <nav
+        id="gesture-legend-bar"
+        class="gesture-legend-bar"
+        aria-label="8-Slot Pinky-Led Gesture to Note Legend (Click or press 1-7 / 0 to trigger)"
+      >
+        <!-- Populated dynamically by src/main.js with finger silhouettes & live chromatic note pills -->
+      </nav>
+
+      <!-- SPLIT-SCREEN AR HUD STAGE -->
+      <main class="stage-wrapper" id="stage-wrapper">
+        <video id="webcam-video" class="webcam-hidden" playsinline muted></video>
+        <canvas id="stage-canvas" width="1280" height="540"></canvas>
+
+        <!-- HUGE CENTER NOTE & CHORD HUD OVERLAY -->
+        <section
+          id="huge-note-hud"
+          class="huge-note-hud"
+          aria-live="polite"
+          aria-label="Active Note and Chord Readout"
+        >
+          <div class="hud-top-meta">
+            <span class="hud-badge" id="hud-gesture-badge">1: PINKY (ROOT)</span>
+            <span class="hud-badge" id="hud-octave-badge">OCTAVE 2 (MID)</span>
+            <span class="hud-freq" id="hud-freq-readout">440.00 Hz</span>
+          </div>
+
+          <div class="hud-main-symbol" id="hud-main-symbol">A4</div>
+
+          <!-- Chord Voicing Note Pills (Visible in Chords Mode) -->
+          <div class="hud-chord-pills hidden" id="hud-chord-pills"></div>
+
+          <!-- Live Wrist-Roll Protractor Bar (-30° b ◄───●───► # +30°) -->
+          <div class="wrist-protractor" title="Rotate Note Wrist ±30° (or press Q / E) for Flat (b) / Sharp (#)">
+            <span class="protractor-end flat-end" id="hud-flat-tag">-30° &#9837;</span>
+            <div class="protractor-track">
+              <div class="protractor-deadzone" title="±20° Neutral Deadzone"></div>
+              <div class="protractor-thumb" id="hud-wrist-thumb"></div>
+            </div>
+            <span class="protractor-end sharp-end" id="hud-sharp-tag">&#9839; +30°</span>
+          </div>
+        </section>
+
+        <!-- Interactive Keyboard/Mouse Helper Strip at bottom-left of stage -->
+        <div class="stage-helper-pill" id="stage-helper-pill">
+          <span><strong>Keys 1–7:</strong> Scale Degrees</span>
+          <span>•</span>
+          <span><strong>0 / Space:</strong> Fist Mute</span>
+          <span>•</span>
+          <span><strong>Q / E:</strong> -30° &#9837; / +30° &#9839; Wrist Roll</span>
+          <span>•</span>
+          <span><strong>Wheel:</strong> Pinch Gap Volume</span>
+        </div>
+      </main>
+
+      <!-- USER PATCH BANK BAR -->
+      <section class="patch-bank-bar" aria-label="User Patch Bank Manager">
+        <div class="patch-bank-left">
+          <label for="patch-select" class="rack-label">PATCH BANK</label>
+          <select id="patch-select" name="patch-select" class="brand-select patch-select"></select>
+          <input
+            type="text"
+            id="patch-name-input"
+            class="rack-input"
+            placeholder="New patch name..."
+            aria-label="New patch name"
+          />
+          <button type="button" id="btn-save-patch" class="rack-mini-btn accent">SAVE PATCH</button>
+          <button type="button" id="btn-delete-patch" class="rack-mini-btn">DELETE</button>
+        </div>
+        <div class="patch-bank-right">
+          <button type="button" id="btn-export-patches" class="rack-mini-btn">EXPORT JSON</button>
+          <label for="input-import-patches" class="rack-mini-btn file-btn-label">
+            IMPORT JSON
+            <input type="file" id="input-import-patches" accept=".json,application/json" hidden />
+          </label>
+        </div>
+      </section>
+
+      <!-- 3 RACK CONTROL MODULES -->
+      <section class="rack-modules-grid" aria-label="Synthesizer Rack Modules">
+        <!-- MODULE 01: SCALE, OCTAVE & GESTURE CALIBRATION -->
+        <article class="rack-module">
+          <header class="module-header">
+            <span class="module-index">MODULE 01</span>
+            <h2 class="module-title">SCALE, OCTAVE &amp; GESTURE CALIBRATION</h2>
+          </header>
+
+          <div class="module-body">
+            <div class="control-row two-col">
+              <div class="field-group">
+                <label for="select-scale-root" class="rack-label">SCALE ROOT</label>
+                <select id="select-scale-root" name="scale-root" class="brand-select">
+                  <option value="C">C (Coral Red)</option>
+                  <option value="C#">C# / Db (Tangerine)</option>
+                  <option value="D">D (Amber Gold)</option>
+                  <option value="D#">D# / Eb (Golden)</option>
+                  <option value="E">E (Lime Mint)</option>
+                  <option value="F">F (Emerald)</option>
+                  <option value="F#">F# / Gb (Seafoam)</option>
+                  <option value="G">G (Cyan)</option>
+                  <option value="G#">G# / Ab (Sky Azure)</option>
+                  <option value="A" selected>A (Iris Violet)</option>
+                  <option value="A#">A# / Bb (Purple)</option>
+                  <option value="B">B (Neon Rose)</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="select-scale-name" class="rack-label">SCALE PRESET</label>
+                <select id="select-scale-name" name="scale-name" class="brand-select">
+                  <option value="Major">Major (Ionian)</option>
+                  <option value="Natural Minor" selected>Natural Minor (Aeolian)</option>
+                  <option value="Dorian">Dorian Mode</option>
+                  <option value="Harmonic Minor">Harmonic Minor</option>
+                  <option value="Major Pentatonic">Major Pentatonic</option>
+                  <option value="Minor Pentatonic">Minor Pentatonic</option>
+                  <option value="Blues Scale">Blues Scale</option>
+                  <option value="Chromatic">Chromatic (1–7)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="control-row two-col">
+              <div class="field-group">
+                <label for="select-octave-count" class="rack-label">STACKED OCTAVE ROWS</label>
+                <select id="select-octave-count" name="octave-count" class="brand-select">
+                  <option value="1">1 Octave (Full Height)</option>
+                  <option value="2">2 Stacked Octaves</option>
+                  <option value="3" selected>3 Stacked Octaves (Default)</option>
+                  <option value="4">4 Stacked Octaves</option>
+                  <option value="5">5 Stacked Octaves</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <span class="rack-label">OCTAVE TRANSPOSE [- / +]</span>
+                <div class="transpose-stepper">
+                  <button type="button" id="btn-oct-down" class="rack-mini-btn" aria-label="Transpose Octave Down">−</button>
+                  <output id="octave-transpose-readout" class="stepper-readout">0 OCT (C3–B5)</output>
+                  <button type="button" id="btn-oct-up" class="rack-mini-btn" aria-label="Transpose Octave Up">+</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="control-row two-col">
+              <div class="field-group">
+                <label for="select-wrist-mode" class="rack-label">WRIST-ROLL INFLECTION (±30°)</label>
+                <select id="select-wrist-mode" name="wrist-mode" class="brand-select">
+                  <option value="step" selected>Hard Semitone Step (±1st at 30°)</option>
+                  <option value="smooth">Smooth Pitch Bend (±1st Continuous)</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="select-expr-target" class="rack-label">RIGHT-HAND X EXPRESSION</label>
+                <select id="select-expr-target" name="expr-target" class="brand-select">
+                  <option value="cutoff" selected>Filter Cutoff (Wah / Brightness)</option>
+                  <option value="unison">Serum Unison Detune &amp; Spread</option>
+                  <option value="vibrato">Vibrato Depth &amp; Rate</option>
+                  <option value="delay">Delay Feedback Swell</option>
+                  <option value="reverb">Reverb Shimmer Space</option>
+                  <option value="none">None (Volume Height Only)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- MODULE 02: SERUM DUAL-OSCILLATOR & UNISON LAB -->
+        <article class="rack-module">
+          <header class="module-header">
+            <span class="module-index">MODULE 02</span>
+            <h2 class="module-title">SERUM DUAL-OSCILLATOR &amp; UNISON LAB</h2>
+          </header>
+
+          <div class="module-body">
+            <div class="control-row">
+              <div class="field-group full-width">
+                <label for="select-voice-preset" class="rack-label">POLYPHONIC &amp; LEAD VOICE PRESET (10 VOICES)</label>
+                <select id="select-voice-preset" name="voice-preset" class="brand-select">
+                  <optgroup label="Serum Rich Textures &amp; Synths">
+                    <option value="Serum Lush Super-Saw" selected>01 • Serum Lush Super-Saw (Default)</option>
+                    <option value="Serum Liquid Pluck / Pad">02 • Serum Liquid Pluck / Pad</option>
+                    <option value="Cyberpunk Reese Bass / Lead">03 • Cyberpunk Reese Bass / Lead</option>
+                    <option value="CS-80 Blade Brass">04 • CS-80 Blade Brass</option>
+                    <option value="Ethereal Vocal Choir Pad">05 • Ethereal Vocal Choir Pad</option>
+                  </optgroup>
+                  <optgroup label="Classic &amp; Organic Poly-Adapted Voices">
+                    <option value="Gentle Whistle">06 • Gentle Whistle</option>
+                    <option value="Windy Flute">07 • Windy Flute</option>
+                    <option value="Ambient Celeste">08 • Ambient Celeste</option>
+                    <option value="Moog Etherwave Poly">09 • Moog Etherwave Poly</option>
+                    <option value="1929 RCA Original">10 • 1929 RCA Original</option>
+                  </optgroup>
+                </select>
+              </div>
+            </div>
+
+            <div class="control-row two-col">
+              <div class="field-group">
+                <label for="select-osca-wave" class="rack-label">OSC A WAVEFORM</label>
+                <select id="select-osca-wave" name="osca-wave" class="brand-select">
+                  <option value="fatsawtooth" selected>Super-Saw (fatsawtooth)</option>
+                  <option value="fatsquare">Super-Square (fatsquare)</option>
+                  <option value="sawtooth">Sawtooth</option>
+                  <option value="square">Square</option>
+                  <option value="pulse">Pulse</option>
+                  <option value="triangle">Triangle</option>
+                  <option value="sine">Pure Sine</option>
+                </select>
+              </div>
+
+              <div class="field-group">
+                <label for="select-oscb-wave" class="rack-label">OSC B WAVEFORM</label>
+                <select id="select-oscb-wave" name="oscb-wave" class="brand-select">
+                  <option value="fatsawtooth" selected>Super-Saw (fatsawtooth)</option>
+                  <option value="fatsquare">Super-Square (fatsquare)</option>
+                  <option value="sawtooth">Sawtooth</option>
+                  <option value="square">Square</option>
+                  <option value="pulse">Pulse</option>
+                  <option value="triangle">Triangle</option>
+                  <option value="sine">Pure Sine</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 6 Rotary Knobs for Unison, Sub, Mix, Fine Detune, LFO -->
+            <div class="knobs-row six-knobs">
+              <div class="knob-cell" data-param="unisonVoices" data-min="1" data-max="8" data-step="1" data-unit="v">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Unison Voices" aria-valuemin="1" aria-valuemax="8" aria-valuenow="6">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">UNISON</span>
+                <output class="knob-value" id="val-unisonVoices">6v</output>
+              </div>
+
+              <div class="knob-cell" data-param="unisonSpread" data-min="0" data-max="60" data-step="1" data-unit="¢">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Unison Detune Spread" aria-valuemin="0" aria-valuemax="60" aria-valuenow="38">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">SPREAD</span>
+                <output class="knob-value" id="val-unisonSpread">38¢</output>
+              </div>
+
+              <div class="knob-cell" data-param="subLevel" data-min="0" data-max="1" data-step="0.01" data-unit="%">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Sub Oscillator Level" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.42">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">SUB -1 OCT</span>
+                <output class="knob-value" id="val-subLevel">42%</output>
+              </div>
+
+              <div class="knob-cell" data-param="oscMix" data-min="0" data-max="1" data-step="0.01" data-unit="%">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Oscillator A/B Mix" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.45">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">A/B MIX</span>
+                <output class="knob-value" id="val-oscMix">45%</output>
+              </div>
+
+              <div class="knob-cell" data-param="oscBDetune" data-min="-50" data-max="50" data-step="1" data-unit="¢">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Osc B Fine Detune" aria-valuemin="-50" aria-valuemax="50" aria-valuenow="14">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">OSC B FINE</span>
+                <output class="knob-value" id="val-oscBDetune">+14¢</output>
+              </div>
+
+              <div class="knob-cell" data-param="lfoDepth" data-min="0" data-max="1" data-step="0.01" data-unit="%">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Vibrato LFO Depth" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.08">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">LFO DEPTH</span>
+                <output class="knob-value" id="val-lfoDepth">8%</output>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- MODULE 03: MASTER SHAPING, ROUTING & WEB MIDI -->
+        <article class="rack-module">
+          <header class="module-header">
+            <span class="module-index">MODULE 03</span>
+            <h2 class="module-title">MASTER SHAPING, SUSTAIN &amp; WEB MIDI</h2>
+          </header>
+
+          <div class="module-body">
+            <div class="knobs-row five-knobs">
+              <div class="knob-cell" data-param="cutoff" data-min="200" data-max="12000" data-step="20" data-unit="Hz">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Filter Cutoff Frequency" aria-valuemin="200" aria-valuemax="12000" aria-valuenow="4800">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">CUTOFF</span>
+                <output class="knob-value" id="val-cutoff">4800Hz</output>
+              </div>
+
+              <div class="knob-cell" data-param="resonance" data-min="0.5" data-max="12" data-step="0.1" data-unit="Q">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Filter Resonance Q" aria-valuemin="0.5" aria-valuemax="12" aria-valuenow="1.8">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">RESO (Q)</span>
+                <output class="knob-value" id="val-resonance">1.8Q</output>
+              </div>
+
+              <div class="knob-cell" data-param="attack" data-min="0.005" data-max="1.5" data-step="0.005" data-unit="s">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Envelope Attack" aria-valuemin="0.005" aria-valuemax="1.5" aria-valuenow="0.018">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">ATTACK</span>
+                <output class="knob-value" id="val-attack">18ms</output>
+              </div>
+
+              <div class="knob-cell" data-param="release" data-min="0.03" data-max="3.0" data-step="0.02" data-unit="s">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Envelope Release" aria-valuemin="0.03" aria-valuemax="3.0" aria-valuenow="0.35">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">RELEASE</span>
+                <output class="knob-value" id="val-release">350ms</output>
+              </div>
+
+              <div class="knob-cell" data-param="grit" data-min="0" data-max="1" data-step="0.01" data-unit="%">
+                <div class="rotary-dial" tabindex="0" role="slider" aria-label="Tube Grit Saturation" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.12">
+                  <div class="dial-indicator"></div>
+                </div>
+                <span class="knob-label">TUBE GRIT</span>
+                <output class="knob-value" id="val-grit">12%</output>
+              </div>
+            </div>
+
+            <div class="control-row two-col master-toggles-row">
+              <div class="field-group">
+                <span class="rack-label">CHORD / DRONE HOLD SUSTAIN</span>
+                <button type="button" id="btn-drone-hold" class="rack-toggle-btn">
+                  <span class="btn-led" id="drone-led"></span>
+                  <span id="drone-label">DRONE SUSTAIN: OFF</span>
+                </button>
+              </div>
+
+              <div class="field-group">
+                <span class="rack-label">POLYPHONIC WEB MIDI OUT</span>
+                <button type="button" id="btn-midi-toggle" class="rack-toggle-btn">
+                  <span class="btn-led" id="midi-led"></span>
+                  <span id="midi-label">MIDI OUT: OFF</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="control-row">
+              <div class="field-group full-width">
+                <label for="select-midi-port" class="rack-label">MIDI OUTPUT PORT (IAC DRIVER PRIORITY)</label>
+                <select id="select-midi-port" name="midi-port" class="brand-select">
+                  <option value="">No MIDI Outputs Detected (Enable MIDI Out to scan)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <!-- 5-PEDAL BOSS-STYLE STOMPBOX BOARD (SERIES DSP CHAIN) -->
+      <section class="pedalboard-section" aria-label="5-Pedal Boss-Style Stompbox Chain">
+        <div class="pedalboard-header">
+          <span class="pedal-chain-title">5-PEDAL BOSS SERIES DSP CHAIN</span>
+          <span class="pedal-chain-flow">
+            PolySerumSynth → <strong>OC-3</strong> → <strong>PS-6</strong> → <strong>FZ-2</strong> →
+            <strong>DD-7</strong> → <strong>RV-6 FDN</strong> → <strong>Limiter (-1 dB)</strong>
+          </span>
+        </div>
+
+        <div class="pedalboard-grid">
+          <!-- PEDAL 1: OC-3 SUPER OCTAVE -->
+          <div class="stompbox pedal-oc3" data-pedal="oc3">
+            <div class="pedal-top">
+              <div class="pedal-check-row">
+                <span class="pedal-led" id="led-oc3"></span>
+                <span class="pedal-check-label">CHECK</span>
+              </div>
+              <div class="pedal-knobs">
+                <div class="knob-cell mini" data-pedal="oc3" data-param="sub1" data-min="0" data-max="1" data-step="0.02">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="OC-3 Sub -1 Octave"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">SUB -1</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="oc3" data-param="sub2" data-min="0" data-max="1" data-step="0.02">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="OC-3 Sub -2 Octave"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">SUB -2</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="oc3" data-param="direct" data-min="0" data-max="1" data-step="0.02">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="OC-3 Direct Level"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">DIRECT</span>
+                </div>
+              </div>
+              <div class="pedal-nameplate">
+                <span class="pedal-model">OC-3</span>
+                <span class="pedal-type">SUPER OCTAVE</span>
+              </div>
+            </div>
+            <button type="button" class="pedal-footswitch" data-toggle-pedal="oc3" aria-pressed="false">
+              <span class="footswitch-pad">BYPASSED</span>
+            </button>
+          </div>
+
+          <!-- PEDAL 2: PS-6 HARMONIST -->
+          <div class="stompbox pedal-ps6" data-pedal="ps6">
+            <div class="pedal-top">
+              <div class="pedal-check-row">
+                <span class="pedal-led" id="led-ps6"></span>
+                <span class="pedal-check-label">CHECK</span>
+              </div>
+              <div class="pedal-knobs">
+                <div class="knob-cell mini" data-pedal="ps6" data-param="shiftSemitones" data-min="-12" data-max="12" data-step="1">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="PS-6 Harmony Pitch Shift"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">SHIFT</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="ps6" data-param="detune" data-min="0" data-max="40" data-step="1">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="PS-6 Detune Width"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">DETUNE</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="ps6" data-param="mix" data-min="0" data-max="1" data-step="0.02">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="PS-6 Harmony Mix"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">MIX</span>
+                </div>
+              </div>
+              <div class="pedal-nameplate">
+                <span class="pedal-model">PS-6</span>
+                <span class="pedal-type">HARMONIST</span>
+              </div>
+            </div>
+            <button type="button" class="pedal-footswitch" data-toggle-pedal="ps6" aria-pressed="false">
+              <span class="footswitch-pad">BYPASSED</span>
+            </button>
+          </div>
+
+          <!-- PEDAL 3: FZ-2 HYPER FUZZ -->
+          <div class="stompbox pedal-fz2" data-pedal="fz2">
+            <div class="pedal-top">
+              <div class="pedal-check-row">
+                <span class="pedal-led" id="led-fz2"></span>
+                <span class="pedal-check-label">CHECK</span>
+              </div>
+              <div class="pedal-knobs">
+                <div class="knob-cell mini" data-pedal="fz2" data-param="drive" data-min="0.05" data-max="1" data-step="0.02">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="FZ-2 Fuzz Drive"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">GAIN</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="fz2" data-param="tone" data-min="600" data-max="9000" data-step="100">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="FZ-2 Fuzz Tone"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">TONE</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="fz2" data-param="level" data-min="0.1" data-max="1" data-step="0.02">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="FZ-2 Fuzz Level"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">LEVEL</span>
+                </div>
+              </div>
+              <div class="pedal-nameplate">
+                <span class="pedal-model">FZ-2</span>
+                <span class="pedal-type">HYPER FUZZ</span>
+              </div>
+            </div>
+            <button type="button" class="pedal-footswitch" data-toggle-pedal="fz2" aria-pressed="false">
+              <span class="footswitch-pad">BYPASSED</span>
+            </button>
+          </div>
+
+          <!-- PEDAL 4: DD-7 DIGITAL DELAY -->
+          <div class="stompbox pedal-dd7" data-pedal="dd7">
+            <div class="pedal-top">
+              <div class="pedal-check-row">
+                <span class="pedal-led" id="led-dd7"></span>
+                <span class="pedal-check-label">CHECK</span>
+              </div>
+              <div class="pedal-knobs">
+                <div class="knob-cell mini" data-pedal="dd7" data-param="time" data-min="0.05" data-max="0.8" data-step="0.01">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="DD-7 Delay Time"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">TIME</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="dd7" data-param="feedback" data-min="0" data-max="0.88" data-step="0.02">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="DD-7 Delay Feedback"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">F.BACK</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="dd7" data-param="mix" data-min="0" data-max="0.9" data-step="0.02">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="DD-7 Delay Mix"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">E.LEVEL</span>
+                </div>
+              </div>
+              <div class="pedal-nameplate">
+                <span class="pedal-model">DD-7</span>
+                <span class="pedal-type">DIGITAL DELAY</span>
+              </div>
+            </div>
+            <button type="button" class="pedal-footswitch" data-toggle-pedal="dd7" aria-pressed="false">
+              <span class="footswitch-pad">BYPASSED</span>
+            </button>
+          </div>
+
+          <!-- PEDAL 5: RV-6 DIGITAL REVERB -->
+          <div class="stompbox pedal-rv6" data-pedal="rv6">
+            <div class="pedal-top">
+              <div class="pedal-check-row">
+                <span class="pedal-led" id="led-rv6"></span>
+                <span class="pedal-check-label">CHECK</span>
+              </div>
+              <div class="pedal-knobs">
+                <div class="knob-cell mini" data-pedal="rv6" data-param="decay" data-min="0.5" data-max="6.0" data-step="0.1">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="RV-6 Reverb Decay"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">TIME</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="rv6" data-param="shimmer" data-min="1200" data-max="10000" data-step="100">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="RV-6 Shimmer Tone"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">TONE</span>
+                </div>
+                <div class="knob-cell mini" data-pedal="rv6" data-param="mix" data-min="0" data-max="0.95" data-step="0.02">
+                  <div class="rotary-dial" tabindex="0" role="slider" aria-label="RV-6 Reverb Mix"><div class="dial-indicator"></div></div>
+                  <span class="knob-label">E.LEVEL</span>
+                </div>
+              </div>
+              <div class="pedal-nameplate">
+                <span class="pedal-model">RV-6</span>
+                <span class="pedal-type">SCHROEDER FDN REVERB</span>
+              </div>
+            </div>
+            <button type="button" class="pedal-footswitch" data-toggle-pedal="rv6" aria-pressed="false">
+              <span class="footswitch-pad">BYPASSED</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

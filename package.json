@@ -1,0 +1,18 @@
+{
+  "name": "gesture-pet-cam-synth",
+  "version": "1.0.0",
+  "description": "Aether-Vision Gesture Harmonic Workstation — Split-screen pinky-led gesture-to-note & 6-quadrant chord workstation with MediaPipe Tasks-Vision and Tone.js v15 PolySerumSynth",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 5180"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.18",
+    "tone": "^15.0.4"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
